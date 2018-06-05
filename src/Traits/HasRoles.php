@@ -6,11 +6,24 @@ use Illuminate\Support\Collection;
 use Pkeogan\Permission\Contracts\Role;
 use Illuminate\Database\Eloquent\Builder;
 use Pkeogan\Permission\Contracts\Permission;
+use Pkeogan\Permission\Traits\Boolean\HasRoleBoolean;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Pkeogan\Permission\Traits\Exceptions\HasRoleExceptions;
+use Pkeogan\Permission\Traits\Attributes\HasRoleAttributes;
+use Pkeogan\Permission\Traits\Methods\HasRoleConvertMethods;
+use Pkeogan\Permission\Traits\Collections\HasRoleCollections;
+use Pkeogan\Permission\Traits\Methods\HasRoleRelationshipMethods;
+
 
 trait HasRoles
 {
     use HasPermissions;
+    use HasRoleBoolean;
+    use HasRoleExceptions;
+    use HasRoleCollections;
+    use HasRoleConvertMethods;
+    use HasRoleRelationshipMethods;
+    
 
     public static function bootHasRoles()
     {
@@ -87,27 +100,7 @@ trait HasRoles
         });
     }
 
-    /**
-     * @param string|array|\Pkeogan\Permission\Contracts\Permission|\Illuminate\Support\Collection $permissions
-     *
-     * @return array
-     */
-    protected function convertToPermissionModels($permissions): array
-    {
-        if ($permissions instanceof Collection) {
-            $permissions = $permissions->all();
-        }
-
-        $permissions = array_wrap($permissions);
-
-        return array_map(function ($permission) {
-            if ($permission instanceof Permission) {
-                return $permission;
-            }
-
-            return app(Permission::class)->findByName($permission, $this->getDefaultGuardName());
-        }, $permissions);
-    }
+    
 
     /**
      * Scope the model query to certain permissions only.
@@ -144,262 +137,6 @@ trait HasRoles
                     });
                 }
             });
-    }
-
-    /**
-     * Assign the given role to the model.
-     *
-     * @param array|string|\Pkeogan\Permission\Contracts\Role ...$roles
-     *
-     * @return $this
-     */
-    public function assignRole(...$roles)
-    {
-        $roles = collect($roles)
-            ->flatten()
-            ->map(function ($role) {
-                return $this->getStoredRole($role);
-            })
-            ->each(function ($role) {
-                $this->ensureModelSharesGuard($role);
-            })
-            ->all();
-
-        $this->roles()->saveMany($roles);
-
-        $this->forgetCachedPermissions();
-
-        return $this;
-    }
-
-    /**
-     * Revoke the given role from the model.
-     *
-     * @param string|\Pkeogan\Permission\Contracts\Role $role
-     */
-    public function removeRole($role)
-    {
-        $this->roles()->detach($this->getStoredRole($role));
-    }
-
-    /**
-     * Remove all current roles and set the given ones.
-     *
-     * @param array|\Pkeogan\Permission\Contracts\Role|string ...$roles
-     *
-     * @return $this
-     */
-    public function syncRoles(...$roles)
-    {
-        $this->roles()->detach();
-
-        return $this->assignRole($roles);
-    }
-
-    /**
-     * Determine if the model has (one of) the given role(s).
-     *
-     * @param string|array|\Pkeogan\Permission\Contracts\Role|\Illuminate\Support\Collection $roles
-     *
-     * @return bool
-     */
-    public function hasRole($roles): bool
-    {
-        if (is_string($roles) && false !== strpos($roles, '|')) {
-            $roles = $this->convertPipeToArray($roles);
-        }
-
-        if (is_string($roles)) {
-            return $this->roles->contains('name', $roles);
-        }
-
-        if ($roles instanceof Role) {
-            return $this->roles->contains('id', $roles->id);
-        }
-
-        if (is_array($roles)) {
-            foreach ($roles as $role) {
-                if ($this->hasRole($role)) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        return $roles->intersect($this->roles)->isNotEmpty();
-    }
-
-    /**
-     * Determine if the model has any of the given role(s).
-     *
-     * @param string|array|\Pkeogan\Permission\Contracts\Role|\Illuminate\Support\Collection $roles
-     *
-     * @return bool
-     */
-    public function hasAnyRole($roles): bool
-    {
-        return $this->hasRole($roles);
-    }
-
-    /**
-     * Determine if the model has all of the given role(s).
-     *
-     * @param string|\Pkeogan\Permission\Contracts\Role|\Illuminate\Support\Collection $roles
-     *
-     * @return bool
-     */
-    public function hasAllRoles($roles): bool
-    {
-        if (is_string($roles) && false !== strpos($roles, '|')) {
-            $roles = $this->convertPipeToArray($roles);
-        }
-
-        if (is_string($roles)) {
-            return $this->roles->contains('name', $roles);
-        }
-
-        if ($roles instanceof Role) {
-            return $this->roles->contains('id', $roles->id);
-        }
-
-        $roles = collect()->make($roles)->map(function ($role) {
-            return $role instanceof Role ? $role->name : $role;
-        });
-
-        return $roles->intersect($this->roles->pluck('name')) == $roles;
-    }
-
-    /**
-     * Determine if the model may perform the given permission.
-     *
-     * @param string|\Pkeogan\Permission\Contracts\Permission $permission
-     * @param string|null $guardName
-     *
-     * @return bool
-     */
-    public function hasPermissionTo($permission, $guardName = null): bool
-    {
-        if (is_string($permission)) {
-            $permission = app(Permission::class)->findByName(
-                $permission,
-                $guardName ?? $this->getDefaultGuardName()
-            );
-        }
-
-        if (is_int($permission)) {
-            $permission = app(Permission::class)->findById($permission, $this->getDefaultGuardName());
-        }
-
-        return $this->hasDirectPermission($permission) || $this->hasPermissionViaRole($permission);
-    }
-
-    /**
-     * Determine if the model has any of the given permissions.
-     *
-     * @param array ...$permissions
-     *
-     * @return bool
-     */
-    public function hasAnyPermission(...$permissions): bool
-    {
-        if (is_array($permissions[0])) {
-            $permissions = $permissions[0];
-        }
-
-        foreach ($permissions as $permission) {
-            if ($this->hasPermissionTo($permission)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Determine if the model has, via roles, the given permission.
-     *
-     * @param \Pkeogan\Permission\Contracts\Permission $permission
-     *
-     * @return bool
-     */
-    protected function hasPermissionViaRole(Permission $permission): bool
-    {
-        return $this->hasRole($permission->roles);
-    }
-
-    /**
-     * Determine if the model has the given permission.
-     *
-     * @param string|\Pkeogan\Permission\Contracts\Permission $permission
-     *
-     * @return bool
-     */
-    public function hasDirectPermission($permission): bool
-    {
-        if (is_string($permission)) {
-            $permission = app(Permission::class)->findByName($permission, $this->getDefaultGuardName());
-            if (! $permission) {
-                return false;
-            }
-        }
-
-        if (is_int($permission)) {
-            $permission = app(Permission::class)->findById($permission, $this->getDefaultGuardName());
-            if (! $permission) {
-                return false;
-            }
-        }
-
-        return $this->permissions->contains('id', $permission->id);
-    }
-
-    /**
-     * Return all permissions the directory coupled to the model.
-     */
-    public function getDirectPermissions(): Collection
-    {
-        return $this->permissions;
-    }
-
-    /**
-     * Return all the permissions the model has via roles.
-     */
-    public function getPermissionsViaRoles(): Collection
-    {
-        return $this->load('roles', 'roles.permissions')
-            ->roles->flatMap(function ($role) {
-                return $role->permissions;
-            })->sort()->values();
-    }
-
-    /**
-     * Return all the permissions the model has, both directly and via roles.
-     */
-    public function getAllPermissions(): Collection
-    {
-        return $this->permissions
-            ->merge($this->getPermissionsViaRoles())
-            ->sort()
-            ->values();
-    }
-
-    public function getRoleNames(): Collection
-    {
-        return $this->roles->pluck('name');
-    }
-
-    protected function getStoredRole($role): Role
-    {
-        if (is_numeric($role)) {
-            return app(Role::class)->findById($role, $this->getDefaultGuardName());
-        }
-
-        if (is_string($role)) {
-            return app(Role::class)->findByName($role, $this->getDefaultGuardName());
-        }
-
-        return $role;
     }
 
     protected function convertPipeToArray(string $pipeString)

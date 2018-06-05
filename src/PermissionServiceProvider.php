@@ -2,13 +2,17 @@
 
 namespace Pkeogan\Permission;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\View\Compilers\BladeCompiler;
 use Pkeogan\Permission\Contracts\Role as RoleContract;
 use Pkeogan\Permission\Contracts\Permission as PermissionContract;
+use Pkeogan\Permission\Traits\Collections\ExtendCollections;
 
 class PermissionServiceProvider extends ServiceProvider
 {
+    use ExtendCollections;
+    
     public function boot(PermissionRegistrar $permissionLoader)
     {
         if (isNotLumen()) {
@@ -33,6 +37,7 @@ class PermissionServiceProvider extends ServiceProvider
         }
 
         $this->registerModelBindings();
+        $this->registerCollectionBindings();
 
         $permissionLoader->registerPermissions();
     }
@@ -47,7 +52,12 @@ class PermissionServiceProvider extends ServiceProvider
         }
 
         $this->registerBladeExtensions();
+                
+      
+      
     }
+ 
+ 
 
     protected function registerModelBindings()
     {
@@ -93,6 +103,12 @@ class PermissionServiceProvider extends ServiceProvider
                 return "<?php if(auth({$guard})->check() && auth({$guard})->user()->hasAllRoles({$roles})): ?>";
             });
             $bladeCompiler->directive('endhasallroles', function () {
+                return '<?php endif; ?>';
+            });
+            $bladeCompiler->directive('haspermission', function ($permission) {
+                return "<?php if(Auth::user()->hasPermissionWithParents({$permission})): ?>";
+            });
+            $bladeCompiler->directive('endhaspermission', function () {
                 return '<?php endif; ?>';
             });
         });

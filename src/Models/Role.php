@@ -12,10 +12,14 @@ use Pkeogan\Permission\Contracts\Role as RoleContract;
 use Pkeogan\Permission\Traits\RefreshesPermissionCache;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Pkeogan\Permission\Traits\Collections\RoleCollections;
+use Pkeogan\Permission\Traits\Methods\RoleRelationshipMethods;
 
 class Role extends Model implements RoleContract
 {
     use HasPermissions;
+    use RoleCollections;
+    use RoleRelationshipMethods;
     use RefreshesPermissionCache;
 
     public $guarded = ['id'];
@@ -43,6 +47,11 @@ class Role extends Model implements RoleContract
 
         return static::query()->create($attributes);
     }
+    
+    
+// |--------------------------------------------------------------------------
+// |  Relationships
+// |--------------------------------------------------------------------------  
 
     /**
      * A role may be given various permissions.
@@ -68,6 +77,10 @@ class Role extends Model implements RoleContract
             'model_id'
         );
     }
+    
+// |--------------------------------------------------------------------------
+// |  Collections
+// |--------------------------------------------------------------------------  
 
     /**
      * Find a role by its name and guard name.
@@ -91,7 +104,17 @@ class Role extends Model implements RoleContract
 
         return $role;
     }
-
+    
+    /**
+     * Find a role by its ID and guard name.
+     *
+     * @param string $name
+     * @param string|null $guardName
+     *
+     * @return \Pkeogan\Permission\Contracts\Role|\Pkeogan\Permission\Models\Role
+     *
+     * @throws \Pkeogan\Permission\Exceptions\RoleDoesNotExist
+     */
     public static function findById(int $id, $guardName = null): RoleContract
     {
         $guardName = $guardName ?? Guard::getDefaultName(static::class);
@@ -104,38 +127,8 @@ class Role extends Model implements RoleContract
 
         return $role;
     }
-  
-    /**
-     * Give an array/collection of roles an array/collection of permissions
-     *
-     * @param array $permissions
-     * @param array $roles
-     * @param string|null $guardName
-     *
-     * @return \Pkeogan\Permission\Contracts\Role|\Pkeogan\Permission\Models\Role
-     *
-     * @throws \Pkeogan\Permission\Exceptions\RoleDoesNotExist
-     */
-    public static function givePermissionsToRoles($permissionsParameter, $rolesParameter, $guardName = null)
-    {
-      if(! $permissionsParam instanceof Illuminate\Database\Eloquent\Collection)
-      { 
-        // Check if 
-        if(is_numeric($permissions))
-          {
-              $permissions = self::findById($permissions, $guardName);
-         
-          } else {
-              $permissions = self::findByName($permissions, $guardName);
-          }
-        dd('collection fo objects'); 
-      }
-      if(! $roles instanceof Illuminate\Database\Eloquent\Collection){ dd('collection fo objects'); }
-      foreach($roles as $role)
-      {
-        $role->syncPermissions($permissions);
-      }
-    }
+    
+
 
     /**
      * Determine if the user may perform the given permission.

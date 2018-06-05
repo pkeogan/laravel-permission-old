@@ -12,11 +12,17 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Pkeogan\Permission\Exceptions\PermissionDoesNotExist;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Pkeogan\Permission\Exceptions\PermissionAlreadyExists;
+use Pkeogan\Permission\Traits\Attributes\PermissionAttributes;
+use Pkeogan\Permission\Traits\Methods\PermissionRelationshipMethods;
+use Pkeogan\Permission\Traits\Collections\PermissionCollections;
 use Pkeogan\Permission\Contracts\Permission as PermissionContract;
 
 class Permission extends Model implements PermissionContract
-{
+{ 
     use HasRoles;
+    use PermissionRelationshipMethods;
+    use PermissionAttributes;
+    use PermissionCollections;
     use RefreshesPermissionCache;
 
     public $guarded = ['id'];
@@ -29,7 +35,17 @@ class Permission extends Model implements PermissionContract
 
         $this->setTable(config('permission.table_names.permissions'));
     }
-
+// |--------------------------------------------------------------------------
+// |  Creation Methods
+// |--------------------------------------------------------------------------
+    /**
+     * Create a permission.
+     *
+     * @param string $name
+     * @param string|null $guardName
+     *
+     * @return \Pkeogan\Permission\Contracts\Permission
+     */
     public static function create(array $attributes = [])
     {
         $attributes['guard_name'] = $attributes['guard_name'] ?? Guard::getDefaultName(static::class);
@@ -41,10 +57,111 @@ class Permission extends Model implements PermissionContract
         if (isNotLumen() && app()::VERSION < '5.4') {
             return parent::create($attributes);
         }
+        
 
         return static::query()->create($attributes);
     }
+  
+    /**
+     * Find or create permission by its name (and optionally guardName).
+     *
+     * @param string $name
+     * @param string|null $guardName
+     *
+     * @return \Pkeogan\Permission\Contracts\Permission
+     */
+    public static function findOrCreate(string $name, $guardName = null): PermissionContract
+    {
+        $guardName = $guardName ?? Guard::getDefaultName(static::class);
 
+        $permission = static::getPermissions()->where('name', $name)->where('guard_name', $guardName)->first();
+
+        if (! $permission) {
+            return static::create(['name' => $name, 'guard_name' => $guardName]);
+        }
+
+        return $permission;
+    }
+    
+        /**
+     * Find or create permission by its id (and optionally guardName).
+     *
+     * @param string $id
+     * @param string|null $guardName
+     *
+     * @return \Pkeogan\Permission\Contracts\Permission
+     */
+    public static function findByIdOrCreate(int $id, $guardName = null): PermissionContract
+    {
+        $guardName = $guardName ?? Guard::getDefaultName(static::class);
+
+        $permission = static::getPermissions()->where('id', $id)->where('guard_name', $guardName)->first();
+
+        if (! $permission) {
+            return static::create(['name' => $name, 'guard_name' => $guardName]);
+        }
+
+        return $permission;
+    }
+    
+    /**
+     *  Create permissions from an array then return the created permisisons in a collection
+     *
+     * @param array $permission
+     *
+     * @return return
+     */
+    public static function createFromArray($names, $uniqueName = "", $guardName = null): Collection
+    {
+        $guardName = $guardName ?? Guard::getDefaultName(static::class);
+        
+        $c = collect();
+        
+        foreach($names as $name)
+        {
+            $c->push(static::create(['name' => $uniqueName . $name, 'guard_name' => $guardName]));
+        }
+        
+        return $c;
+    }
+    
+        /**
+     *  Create permissions from an array then return the created permisisons in a collection
+     *
+     * @param array $permission
+     *
+     * @return return
+     */
+    public static function createFromArrayWithParent($names, $uniqueName, $parentUniqueName, $guardName = null): Collection
+    {
+        $guardName = $guardName ?? Guard::getDefaultName(static::class);
+        
+        $c = collect();
+        
+        foreach($names as $name)
+        {
+            if(substr($name, -strlen("_all")) == "_all")
+            {
+                $parent = static::findByNameOrNull($parentUniqueName . $name, $guardName);
+            } else
+            {
+                $parent = static::findByNameOrNull($parentUniqueName . $name . "_all", $guardName);
+            }
+            if($parent == null)
+            {
+                $c->push(static::create(['name' => $uniqueName . $name, 'guard_name' => $guardName ]));
+            } else {
+                $c->push(static::create(['name' => $uniqueName . $name, 'guard_name' => $guardName, 'parent_id' => $parent->id]));
+            }
+        }
+        
+        return $c;
+    }
+  
+// |--------------------------------------------------------------------------
+// |  Realtionships
+// |--------------------------------------------------------------------------  
+  
     /**
      * A permission can be applied to roles.
      */
@@ -69,6 +186,26 @@ class Permission extends Model implements PermissionContract
             'model_id'
         );
     }
+  
+      /**
+     *  A permission has a parent
+     */
+    public function parent()
+    {
+        return $this->belongsTo(Permission::class, 'parent_id', 'id');
+    }
+  
+    /**
+     *  a Permission has children
+     */
+    public function children()
+    {
+        return $this->hasMany(Permission::class, 'id', 'parent_id');
+    }
+    
+// |--------------------------------------------------------------------------
+// |  Collection Methods
+// |--------------------------------------------------------------------------  
 
     /**
      * Find a permission by its name (and optionally guardName).
@@ -88,6 +225,29 @@ class Permission extends Model implements PermissionContract
 
         if (! $permission) {
             throw PermissionDoesNotExist::create($name, $guardName);
+        }
+
+        return $permission;
+    }
+  
+    /**
+     * Find a permission by its name (and optionally guardName).
+     *
+     * @param string $name
+     * @param string|null $guardName
+     *
+     * @throws \Pkeogan\Permission\Exceptions\PermissionDoesNotExist
+     *
+     * @return \Pkeogan\Permission\Contracts\Permission
+     */
+    public static function findByNameOrNull(string $name, $guardName = null)
+    {
+        $guardName = $guardName ?? Guard::getDefaultName(static::class);
+
+        $permission = static::getPermissions()->where('name', $name)->where('guard_name', $guardName)->first();
+
+        if (! $permission) {
+            return null;
         }
 
         return $permission;
@@ -115,6 +275,30 @@ class Permission extends Model implements PermissionContract
 
         return $permission;
     }
+  
+     /**
+     * Find a permission by its id (and optionally guardName).
+     *
+     * @param int $id
+     * @param string|null $guardName
+     *
+     * @throws \Pkeogan\Permission\Exceptions\PermissionDoesNotExist
+     *
+     * @return \Pkeogan\Permission\Contracts\Permission
+     */
+    public static function findByIdOrNull(int $id, $guardName = null): PermissionContract
+    {
+        $guardName = $guardName ?? Guard::getDefaultName(static::class);
+
+        $permission = static::getPermissions()->where('id', $id)->where('guard_name', $guardName)->first();
+
+        if (! $permission) {
+            return null;
+        }
+
+        return $permission;
+    }
+  
   
     /**
      * Find all the roles of the given permissions, then return an array of the roles that have the given permissions.
@@ -152,28 +336,7 @@ class Permission extends Model implements PermissionContract
         }
       return $allRoles;
     }
-
-    /**
-     * Find or create permission by its name (and optionally guardName).
-     *
-     * @param string $name
-     * @param string|null $guardName
-     *
-     * @return \Pkeogan\Permission\Contracts\Permission
-     */
-    public static function findOrCreate(string $name, $guardName = null): PermissionContract
-    {
-        $guardName = $guardName ?? Guard::getDefaultName(static::class);
-
-        $permission = static::getPermissions()->where('name', $name)->where('guard_name', $guardName)->first();
-
-        if (! $permission) {
-            return static::create(['name' => $name, 'guard_name' => $guardName]);
-        }
-
-        return $permission;
-    }
-
+    
     /**
      * Get the current cached permissions.
      */
@@ -181,4 +344,5 @@ class Permission extends Model implements PermissionContract
     {
         return app(PermissionRegistrar::class)->getPermissions();
     }
+       
 }
