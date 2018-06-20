@@ -105,8 +105,8 @@ class PermissionServiceProvider extends ServiceProvider
             $bladeCompiler->directive('endhasallroles', function () {
                 return '<?php endif; ?>';
             });
-            $bladeCompiler->directive('haspermission', function ($permission) {
-                return "<?php if(Auth::user()->hasPermissionWithParents({$permission})): ?>";
+            $bladeCompiler->directive('haspermission', function ($permissions) {
+                return "<?php if(Auth::user()->hasAnyPermission({$permissions})): ?>";
             });
             $bladeCompiler->directive('endhaspermission', function () {
                 return '<?php endif; ?>';
