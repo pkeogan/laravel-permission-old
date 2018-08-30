@@ -2,6 +2,7 @@
 
 namespace Pkeogan\Permission\Traits\Collections;
 
+use App\Models\Auth\User;
 use Illuminate\Support\Collection;
 use Pkeogan\Permission\Models\Permission;
 
@@ -128,6 +129,22 @@ trait PermissionCollections
               })->orWhereHas('permissions', function ($query) use ($collection) {
                   $query->whereIn('id', $collection->pluck('id')->toArray() );
               })->get();
+      }
+	
+	  /**
+      * Gets all of the users a collections of permissions has.
+      */
+      public static function getUsersFromPermission($permission)
+      {
+		$permission = Permission::findByNameOrNull($permission);
+		  		 if($permission == null){return collect(['permission does not exist']);}
+
+		  $c = $permission->users;
+		  foreach($permission->roles as $role)
+		  {
+			  $c = $c->merge($role->users);
+		  }
+		  return $c;
       }
     
     /**
