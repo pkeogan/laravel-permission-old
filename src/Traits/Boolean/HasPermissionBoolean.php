@@ -20,14 +20,14 @@ trait HasPermissionBoolean
         public function hasPermission($permission, $guardName = null): bool
         {
             if (is_string($permission)) {
-                $permission = app(Permission::class)->findByName(
+                $permission = app(Permission::class)->findOrCreate(
                     $permission,
                     $guardName ?? $this->getDefaultGuardName()
                 );
             }
 
             if (is_int($permission)) {
-                $permission = app(Permission::class)->findById($permission, $this->getDefaultGuardName());
+                $permission = app(Permission::class)->findByIdOrCreate($permission, $this->getDefaultGuardName());
             }
 
             return $this->hasDirectPermission($permission) || $this->hasPermissionViaRole($permission);
