@@ -104,6 +104,19 @@ class Role extends Model implements RoleContract
 
         return $role;
     }
+	
+	public static function findByNameOrNull(string $name, $guardName = null): RoleContract
+    {
+        $guardName = $guardName ?? Guard::getDefaultName(static::class);
+
+        $role = static::where('name', $name)->where('guard_name', $guardName)->first();
+
+        if (! $role) {
+            return null;
+        }
+
+        return $role;
+    }
     
     /**
      * Find a role by its ID and guard name.

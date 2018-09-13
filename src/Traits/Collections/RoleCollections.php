@@ -9,6 +9,15 @@ use Pkeogan\Permission\Models\Role;
 
 trait RoleCollections
 {
+	
+	  public static function getUsersFromName($role)
+      {
+		$role = Role::findByNameOrNull($role);
+	 	if($role == null){return collect(['Role does not exist']);}
+		  
+		  return $role->users();
+      }
+	
     /**
      * Find all the roles of the given permissions, then return an array of the roles that have the given permissions.
      *

@@ -344,5 +344,28 @@ class Permission extends Model implements PermissionContract
     {
         return app(PermissionRegistrar::class)->getPermissions();
     }
+	
+	//delete duplicates
+	public static function deleteDuplicates()
+	{
+		$permissions = Permission::all();
+		$permissions2  = Permission::all();
+		$array = array();
+		foreach($permissions as $permission)
+		{
+			foreach($permissions2 as $permission2)
+			{
+				if($permission->id != $permission2->id)
+				{
+					if($permission->name == $permission2->name)
+					{
+						
+						$array[] = $permission->name;
+					}
+				}
+			}
+		}
+		return $array;
+	}
        
 }
