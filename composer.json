@@ -1,6 +1,7 @@
 {
     "name": "pkeogan/laravel-permission",
     "description": "Permission System for Laravel 5.5 and Up",
+    "version": "1.0",
     "keywords": [
         "pkeogan",
         "laravel",
